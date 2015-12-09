@@ -19,9 +19,9 @@ from boto.dynamodb2.fields import HashKey
 from boto.exception import JSONResponseError
 import time
 
-DEBUG=False
+DEBUG=True
 
-TABLE_NAME = 'kv_pairs'
+TABLE_NAME = 'kv_pairs_4'
 
 print "Making the connection to the database"
 conn = DynamoDBConnection()
@@ -34,9 +34,9 @@ if TABLE_NAME in table_list[u'TableNames'] :
 # Make sure that the database is new, otherwise leftovers from previous runs
 # may cause some of the tests to fail.
   kv_pairs = Table(TABLE_NAME)
+else :
+  kv_pairs = None
 
-#  kv_pairs = Table(TABLE_NAME)
-#  print "Table %s already exists: connecting to it" % TABLE_NAME
 
 
 def get ( key ):
@@ -76,7 +76,7 @@ present, then it returns 403, otherwise, it returns 200"""
        return 200
      except boto.dynamodb2.exceptions.ConditionalCheckFailedException:
        return 403
-   return 400
+  return 400
 
 def put ( key, new_value ):
   """This updates a key-value pair in the database.  If the key is not
@@ -102,6 +102,10 @@ raised."
 
 ################################### Beginning of test code ******
 if __name__ == "__main__" :
+
+  def test_create_table ( table_name ) :
+     return Table.create(table_name, schema=[ HashKey('key')],
+       throughput={ 'read': 5, 'write': 15, })
 
   def test_get( key ):
     print "Getting key %s from database" % key
@@ -177,14 +181,16 @@ if __name__ == "__main__" :
   check_dict = {}   # This dictionary is used to verify that the database
 			# is working correctly
   if DEBUG :
-    print "Deleting the table %s" % TABLE_NAME
-    kv_pairs.delete()
+    if kv_pairs != None :
+      print "Deleting the table %s" % TABLE_NAME
+      kv_pairs.delete()
+    else :
+      print "The table %s is already gone!" % TABLE_NAME 
   # now that the table is gone, recreate it
     while True :
       time.sleep(10)    # it takes some time for the table to delete
       try:
-        kv_pairs = Table.create(TABLE_NAME, schema=[ HashKey('key')],
-       throughput={ 'read': 5, 'write': 15, })
+        kv_pairs = test_create_table(TABLE_NAME)
       except JSONResponseError:
         print "The table %s still isn't deleted.... waiting" % TABLE_NAME
       else:
