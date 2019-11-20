@@ -23,14 +23,14 @@ DEBUG=True
 
 TABLE_NAME = 'kv_pairs_4'
 
-print "Making the connection to the database"
+print("Making the connection to the database")
 conn = DynamoDBConnection()
-print "Getting the list of tables"
+print("Getting the list of tables")
 table_list = conn.list_tables()
 # The table_list is a dictionary with a single key, the value of which is
 # a list of tables associated with this account.  If TABLE_NAME is not in
 # that list, then create the table, otherwise, just connect to it.
-if TABLE_NAME in table_list[u'TableNames'] :
+if TABLE_NAME in table_list['TableNames'] :
 # Make sure that the database is new, otherwise leftovers from previous runs
 # may cause some of the tests to fail.
   kv_pairs = Table(TABLE_NAME)
@@ -94,9 +94,9 @@ present, then it returns 403, otherwise, it returns 200"""
 # According to https://sourcegraph.com/github.com/boto/boto/symbols/python/boto/opsworks/exceptions/ValidationException
 # ValidationException inherits from JSONResponseError
   except JSONResponseError:
-    print "Something went wrong updating the database.  ValidationcwException was\
-raised."
-    print "The type of old_value is "+str(type(old_value))
+    print("Something went wrong updating the database.  ValidationcwException was\
+raised.")
+    print("The type of old_value is "+str(type(old_value)))
     return 500		# I hate to do this
   return 200
 
@@ -108,16 +108,16 @@ if __name__ == "__main__" :
        throughput={ 'read': 5, 'write': 15, })
 
   def test_get( key ):
-    print "Getting key %s from database" % key
+    print("Getting key %s from database" % key)
     value = get ( key )
     if key in check_dict :
-      print "The value for key %s is %s" % ( key, value )
+      print("The value for key %s is %s" % ( key, value ))
       assert value[0] == check_dict[key], \
              "Database returned wrong value: %s should have returned %s" % \
              (value[0], check_dict[key])
       assert value[1] == 200, "Database call did not return 200"
     else :
-      print "key %s does not exist in database" % key
+      print("key %s does not exist in database" % key)
       assert value[0] == None, \
              "Database should have returned None but returned %s" % value[0]
       assert value[1] == 403, \
@@ -125,7 +125,7 @@ if __name__ == "__main__" :
 
 
   def test_post( key, value ):
-    print "Inserting key %s with value %s" % ( key, value )
+    print("Inserting key %s with value %s" % ( key, value ))
     status = post ( key, value )
     if key not in check_dict:
       if DEBUG :
@@ -140,15 +140,15 @@ if __name__ == "__main__" :
 # Verify that the key really inserted the value into the database
       assert value == get ( key )[0]
     else:
-      print "Tried to insert a key that was already in the database." +\
-      "Should have used put instead of post"
+      print("Tried to insert a key that was already in the database." +\
+      "Should have used put instead of post")
       assert status == 403
       
   def test_delete ( key ):
-    print "Testing deleting key %s from the database" % key
+    print("Testing deleting key %s from the database" % key)
     status = delete ( key )
     if key in check_dict :
-      print "key-value pair was deleted"
+      print("key-value pair was deleted")
       assert status == 200, \
           "Status was %d should have been 200 when removing a key that exists" % status
       del check_dict[key]
@@ -157,11 +157,11 @@ if __name__ == "__main__" :
       assert status == (None, 403),"Status was %s should have been a tuple (None,403)"%\
              str( status )
     else:
-      print "The key was not in the database"
+      print("The key was not in the database")
       assert status == 200,"Status was %d should have been 200 after attempting to "+\
              "delete a key from the database that should not have been there"
   def test_put ( key, value ):
-    print "Testing updating key %s with value %s" % ( key, value )
+    print("Testing updating key %s with value %s" % ( key, value ))
     status = put ( key, value )
     if key in check_dict :
       assert status == 200
@@ -170,7 +170,7 @@ if __name__ == "__main__" :
       assert value[0] == check_dict[key]
       assert value[1] == 200
     else :
-      print "Key %s is not in check_dict" % key
+      print("Key %s is not in check_dict" % key)
 # A little consistency check to make sure that the database and the dictionary
 # really are in sync.
       value = get ( key )
@@ -182,32 +182,32 @@ if __name__ == "__main__" :
 			# is working correctly
   if DEBUG :
     if kv_pairs != None :
-      print "Deleting the table %s" % TABLE_NAME
+      print("Deleting the table %s" % TABLE_NAME)
       kv_pairs.delete()
     else :
-      print "The table %s is already gone!" % TABLE_NAME 
+      print("The table %s is already gone!" % TABLE_NAME) 
   # now that the table is gone, recreate it
     while True :
       time.sleep(10)    # it takes some time for the table to delete
       try:
         kv_pairs = test_create_table(TABLE_NAME)
       except JSONResponseError:
-        print "The table %s still isn't deleted.... waiting" % TABLE_NAME
+        print("The table %s still isn't deleted.... waiting" % TABLE_NAME)
       else:
         break
-    print "Created table %s" % TABLE_NAME
+    print("Created table %s" % TABLE_NAME)
     time.sleep(10)
     while True:
       try:
         test_post("Dillon", 17)
       except JSONResponseError:
-        print "Trying to insert a key-value pair failed.  Perhaps the database isn't ready yet"
+        print("Trying to insert a key-value pair failed.  Perhaps the database isn't ready yet")
         time.sleep(5)
       else:
-        print "The database is ready now"
+        print("The database is ready now")
         break
   else :
-    print "Not deleting the table"
+    print("Not deleting the table")
     test_delete("Dillon")    # He may already be in the table
     test_post("Dillon", "Didn't delete the table")
   test_get("Dillon")
@@ -229,13 +229,13 @@ if __name__ == "__main__" :
     check_dict["Randall"] = -12.3
     test_get("Randall")   # This should throw an error because Randall is in the check_dict
   except AssertionError:
-    print "Threw an expected Assertion error getting a non-existant key - all is well"
+    print("Threw an expected Assertion error getting a non-existant key - all is well")
   else :
     assert True,"Did *not* throw an expected Assertion Error"
   try:
     test_put("Randall", 3421)
   except AssertionError:
-    print "Threw an expected Assertion error - all is well.  Tried to update a non-existant key"
+    print("Threw an expected Assertion error - all is well.  Tried to update a non-existant key")
   else :
     assert True,"Did *not* throw an expected Assertion Error"
 # GET, HEAD, PUT
@@ -247,36 +247,36 @@ if __name__ == "__main__" :
   test_get("Devin")
   test_get("Devin")
   while True:
-    op = raw_input("Enter I to insert, U to update, D to delete, or G to get ")
+    op = input("Enter I to insert, U to update, D to delete, or G to get ")
     op = op.upper()
-    key = raw_input("Enter a key ")
+    key = input("Enter a key ")
     if op == "I" :
-      value = raw_input("Enter a value for key %s " % key )
+      value = input("Enter a value for key %s " % key )
       try :
         post ( key, value )
       except boto.dynamodb2.exceptions.ConditionalCheckFailedException:
-        print "Probably the key %s already has a value.  let's see" % key
+        print("Probably the key %s already has a value.  let's see" % key)
         value = get ( key )
-        print "Yes, the value is %s" % value
+        print("Yes, the value is %s" % value)
     elif op == "U" :
-      value = raw_input("Enter a value for key %s" % key )
+      value = input("Enter a value for key %s" % key )
       try :
         put ( key, value )
       except boto.dynamodb2.exceptions.ConditionalCheckFailedException:
-        print "Probably the key %s already doesn't a value.  let's see" % key
+        print("Probably the key %s already doesn't a value.  let's see" % key)
         try :
           value_1 = get( key )
         except boto.dynamodb2.exceptions.ConditionalCheckFailedException:
-          print "I was right - there is no value for key %s" % key
+          print("I was right - there is no value for key %s" % key)
         else :
-          print "Something else must be wrong.  Key %s has value %s" % \
-                (key, value_1)
+          print("Something else must be wrong.  Key %s has value %s" % \
+                (key, value_1))
     elif op == "D" :
       delete ( key )
     elif op == "G" :
       value = get ( key )
-      print "The value of %s is %s" % ( key, value )
+      print("The value of %s is %s" % ( key, value ))
     else :
-      print "You didn't enter I, U, D, or G!"
+      print("You didn't enter I, U, D, or G!")
 
     
