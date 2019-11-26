@@ -21,20 +21,21 @@ import json
 import os
 import random
 import string
+import sys
 import uuid
 from enum import Enum, unique, auto
-import sys
 
 
 @unique
 class Backends(Enum):
-    SQLLIGHT = auto
+    DICT = auto()
     DYNAMO_DB = auto()
+    MONGODB = auto()
     MYSQL = auto()
     SHELVES = auto()
+    SQLLIGHT = auto
     TEXTFILE = auto()
-    MONGODB = auto()
-    DICT = auto()
+
 
 
 class Platforms(Enum):
@@ -95,8 +96,11 @@ class Backend(object):
 
         elif self.backend == Backends.MONGODB:
             db_con = self.initialize_mongodb()
+            print(
+                f"In kv_pair2.py: The type of db_con is {type(db_con)} "
+                f"or {str(type(db_con))}", file=sys.stderr)
         else:
-            raise NotImplemented
+            raise NotImplementedError(f"backend type {str(self.backend)}.")
 
         self.db_con = db_con
         self.gold = dict()
@@ -113,17 +117,22 @@ class Backend(object):
         if self.backend == Backends.DICT:
             self.db_con[ckey] = cvalue
         elif self.backend == Backends.DYNAMO_DB:
-            raise NotImplemented("create Backends.DYNAMO_DB")
+            raise NotImplementedError("create Backends.DYNAMO_DB")
         elif self.backend == Backends.MONGODB:
-            raise NotImplemented("create Backends.MONGODB")
+            # Mongo stores "documents" which are implemented as python dictionaries
+            # If this fails, then start the daemon:
+            # sudo systemctl status mongod)
+            document = { 'key' : ckey,
+                         'value' : cvalue }
+            self.db_con.insert_one(document)
         elif self.backend == Backends.MYSQL:
-            raise NotImplemented("create Backends.MYSQL")
+            raise NotImplementedError("create Backends.MYSQL")
         elif self.backend == Backends.SHELVES:
-            raise NotImplemented("create Backends.SHELVES")
+            raise NotImplementedError("create Backends.SHELVES")
         elif self.backend == Backends.SQLLIGHT:
-            raise NotImplemented("create Backends.SQLIGHT")
+            raise NotImplementedError("create Backends.SQLIGHT")
         elif self.backend == Backends.TEXTFILE:
-            raise NotImplemented("create Backends.TEXTFILE")
+            raise NotImplementedError("create Backends.TEXTFILE")
         else:
             raise ValueError(
                 f"Backend type {self.backend} is not implemented or just wrong")
@@ -138,17 +147,18 @@ class Backend(object):
         if self.backend == Backends.DICT:
             return self.db_con[r_key]
         elif self.backend == Backends.DYNAMO_DB:
-            raise NotImplemented("read Backends.DYNAMO_DB")
+            raise NotImplementedError("read Backends.DYNAMO_DB")
         elif self.backend == Backends.MONGODB:
-            raise NotImplemented("read Backends.MONGODB")
+            value = self.db_con.find_one({'key': r_key })
+            return value
         elif self.backend == Backends.MYSQL:
-            raise NotImplemented("read Backends.MYSQL")
+            raise NotImplementedError("read Backends.MYSQL")
         elif self.backend == Backends.SHELVES:
-            raise NotImplemented("read Backends.SHELVES")
+            raise NotImplementedError("read Backends.SHELVES")
         elif self.backend == Backends.SQLLIGHT:
-            raise NotImplemented("read Backends.SQLIGHT")
+            raise NotImplementedError("read Backends.SQLIGHT")
         elif self.backend == Backends.TEXTFILE:
-            raise NotImplemented("read Backends.TEXTFILE")
+            raise NotImplementedError("read Backends.TEXTFILE")
         else:
             raise ValueError(
                 f"Backend type {self.backend} is not implemented or just wrong")
@@ -170,17 +180,20 @@ class Backend(object):
             original = self.db_con[u_key]
             self.db_con[u_key] = u_value
         elif self.backend == Backends.DYNAMO_DB:
-            raise NotImplemented
+            raise NotImplementedError
         elif self.backend == Backends.MONGODB:
-            raise NotImplemented
+            # Mongo stores "documents" which are implemented as python
+            # dictionaries
+            document = {'key': u_key,
+                        'value': u_value}
         elif self.backend == Backends.MYSQL:
-            raise NotImplemented
+            raise NotImplementedError
         elif self.backend == Backends.SHELVES:
-            raise NotImplemented
+            raise NotImplementedError
         elif self.backend == Backends.SQLLIGHT:
-            raise NotImplemented
+            raise NotImplementedError
         elif self.backend == Backends.TEXTFILE:
-            raise NotImplemented
+            raise NotImplementedError
         else:
             raise ValueError(
                 f"Backend type {self.backend} is not implemented or just wrong")
@@ -199,17 +212,18 @@ class Backend(object):
         if self.backend == Backends.DICT:
             del self.db_con[d_key]
         elif self.backend == Backends.DYNAMO_DB:
-            raise NotImplemented
+            raise NotImplementedError
         elif self.backend == Backends.MONGODB:
-            raise NotImplemented
+            self.db_con.clear()
+            raise NotImplementedError
         elif self.backend == Backends.MYSQL:
-            raise NotImplemented
+            raise NotImplementedError
         elif self.backend == Backends.SHELVES:
-            raise NotImplemented
+            raise NotImplementedError
         elif self.backend == Backends.SQLLIGHT:
-            raise NotImplemented
+            raise NotImplementedError
         elif self.backend == Backends.TEXTFILE:
-            raise NotImplemented
+            raise NotImplementedError
         else:
             raise ValueError(
                 f"Backend type {self.backend} is not implemented or just wrong")
@@ -230,8 +244,18 @@ class Backend(object):
 
         :rtype: pymongo.mongo_client.MongoClient    A handle to a Mongo database
         """
+
+
         pymongo = importlib.import_module(name="pymongo", package="mongo")
-        con = pymongo.MongoClient
+        dba = pymongo.admin
+        try:
+            ss = dba.command("serverStatus")
+        except pymongo.errors.ServerSelectionTimeoutError as p:
+            print("Unable to connect to the mongodb.  Try the 'sudo systemctl start mongodb' command", file=sys.stderr)
+        if ss['ok'] != 1.0:
+            print(f"The mongodb status is {ss['ok']}.  It should be 1.0.  I don't know what that means", file=sys.stderr)
+        mc = pymongo.MongoClient()
+        con = mc.kv_test
         return con
 
 
@@ -255,43 +279,68 @@ def verify_db(backend_obj: Backend):
 if "__main__" == __name__:
 
     COUNT = 100  # How many K/V pairs to generate
-    bcknd = Backend(Backends.DICT)
-    for i in range(COUNT):
-        key = uuid.uuid4()
-        value = random_generator(4)
-        bcknd.gold[key] = value
-        bcknd.create(key, value)
-    print("Completed create", file=sys.stderr)
 
-    if verify_db(bcknd) > 0:
-        print(
-            "SOMETHING WENT WRONG DURING THE INITIAL READBACK - PAY "
-            "ATTENTION!!!!!!")
-    print("Completed verify after create test", file=sys.stderr)
+    def run_crud_verify( vrfy_backend: Backends = Backends.DICT):
+        """
 
-    for key in bcknd.gold.keys():
-        value = random_generator(4)
-        bcknd.gold[key] = value
-        bcknd.update(key, value)
-    print("Completed update", file=sys.stderr)
+        :param vrfy_backend:
+        :return: True if 100% pass on all tests
+        """
+        print(f"Running CRUD verify on backend {str(vrfy_backend)}")
+        results = True
 
-    if verify_db(bcknd) > 0:
-        print("SOMETHING WENT WRONG DURING THE UPDATE - PAY ATTENTION!!!!!!")
-    print("Completed verify after update test", file=sys.stderr)
+        bcknd = Backend(vrfy_backend)
+        for i in range(COUNT):
+            key = uuid.uuid4()
+            value = random_generator(4)
+            bcknd.gold[key] = value
+            bcknd.create(key, value)
+        print("Completed create", file=sys.stderr)
 
-    for key in bcknd.gold.keys():
-        bcknd.delete(key)
-    print("Completed delete", file=sys.stderr)
-
-    for key in bcknd.gold.keys():
-        try:
-            bcknd.read(key)
-        except KeyError:
-            # We expect a KeyError exception, because the key/value pair
-            # should have been deleted.
-            pass
-        else:
+        if verify_db(bcknd) > 0:
             print(
-                "SOMETHING WENT WRONG DURING THE DELETE - PAY ATTENTION!!!!!!")
-    print("Completed verify after delete test", file=sys.stderr)
+                "SOMETHING WENT WRONG DURING THE INITIAL READBACK - PAY "
+                "ATTENTION!!!!!!")
+            results = False
+        print("Completed verify after create test", file=sys.stderr)
+
+        for key in bcknd.gold.keys():
+            value = random_generator(4)
+            bcknd.gold[key] = value
+            bcknd.update(key, value)
+        print("Completed update", file=sys.stderr)
+
+        if verify_db(bcknd) > 0:
+            print("SOMETHING WENT WRONG DURING THE UPDATE - PAY ATTENTION!!!!!!")
+            results = False
+        print("Completed verify after update test", file=sys.stderr)
+
+        for key in bcknd.gold.keys():
+            bcknd.delete(key)
+        print("Completed delete", file=sys.stderr)
+
+        for key in bcknd.gold.keys():
+            try:
+                v = bcknd.read(key)
+            except KeyError:
+                # We expect a KeyError exception, because the key/value pair
+                # should have been deleted.
+                pass
+            else:
+                print(
+                    "SOMETHING WENT WRONG DURING THE DELETE - PAY ATTENTION!!!!!!")
+                results = False
+                print(f"Reading from key {key} ")
+
+        print("Completed verify after delete test", file=sys.stderr)
+        return results
+
+
+    run_crud_verify(vrfy_backend=Backends.DICT)
+    # run_crud_verify(vrfy_backend=Backends.DYNAMO_DB)
+    run_crud_verify(vrfy_backend=Backends.MONGODB)
+    run_crud_verify(vrfy_backend=Backends.MYSQL)
+    run_crud_verify(vrfy_backend=Backends.SHELVES)
+    run_crud_verify(vrfy_backend=Backends.SQLLIGHT)
+    run_crud_verify(vrfy_backend=Backends.TEXTFILE)
 
