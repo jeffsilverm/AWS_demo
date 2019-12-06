@@ -244,8 +244,6 @@ class Backend(object):
 
         :rtype: pymongo.mongo_client.MongoClient    A handle to a Mongo database
         """
-
-
         pymongo = importlib.import_module(name="pymongo", package="mongo")
         dba = pymongo.admin
         try:
