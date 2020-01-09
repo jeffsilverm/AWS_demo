@@ -24,6 +24,8 @@ import string
 import sys
 import uuid
 from enum import Enum, unique, auto
+import pdb
+import pymongo
 
 
 @unique
@@ -35,7 +37,6 @@ class Backends(Enum):
     SHELVES = auto()
     SQLLIGHT = auto
     TEXTFILE = auto()
-
 
 
 class Platforms(Enum):
@@ -74,6 +75,98 @@ def random_generator(size=6, chars=string.ascii_uppercase + string.digits):
     # https://gist.github.com/pylover/7870c235867cf22817ac5b096defb768
     # noinspection PyUnusedLocal
     return ''.join(random.choice(chars) for x in range(size))
+
+
+class BackendsAbstract(object):
+    """This is an abstract class that defines the methods that a backend
+    class has to implement.  If a backend class does not implement one
+    of these methods, then the abstract class will raise a NonImplemented
+    exception """
+
+    def create(self, key, value) -> None:
+        """Create a record or a document"""
+        raise NotImplementedError
+
+    def read(self, key) -> None:
+        """Read a record or a document"""
+        raise NotImplementedError
+
+    def update(self, key, value) -> None:
+        """update a record or a document.  It is an error to update a
+        record or a document that already exists, if only to differentiate
+        between creating a record and updating a record"""
+        raise NotImplementedError
+
+    def delete(self, key, value) -> None:
+        raise NotImplementedError
+
+    def connect(self, db_name) -> None:
+        raise NotImplementedError
+
+    def disconnect(self) -> None:
+        raise NotImplementedError
+
+    def get_key_list(self) -> None:
+        raise NotImplementedError
+
+
+class BackendMongo(BackendsAbstract):
+
+    def __init__(self, db_server: str = "localhost", db_port: int = 27017,
+                 db_name: str = "mongo_db") -> None:
+        # I ran into this problem, db_port was a string, raised a _topography problem.
+        assert isinstance(db_port, int), "db_port has to be an int"
+        try:
+            self.client = pymongo.MongoClient(host=db_server, port=db_port)
+        except Exception as e:
+            print(f"pymongo.MongoClient raised exception {str(e)}.  Is the server running?", file=sys.stderr )
+            raise
+        self.db_name = db_name
+        self.db = self.client[self.db_name]
+        self.posts = self.db.ports
+
+    def create(self, key, value) -> None:
+        """Insert a document into the database.  Mongodb looks for a special
+        key, _id, which must be unique across a collection
+        (this is a test case)"""
+        # From
+        # https://api.mongodb.com/python/current/api/pymongo/collection.html#pymongo.collection.Collection.insert_one
+        document = {"_id": key, "value": value}
+        print(f"Created a document object {document}", file=sys.stderr)
+        self.db[self.db_name].insert_one( document )
+        return None
+
+    def read(self, key) -> str:
+        """fetch a document from the database
+        :param  key str The key to look up in the database
+        """
+        print(f"Searching for _id: {key}", file=sys.stderr )
+        results = self.db[self.db_name].find({"_id": key} )
+        assert results is not None, "find returned a None object."
+        r = ""
+        while True:
+            try:
+                nx = results.next()
+            except StopIteration as s:
+                break
+            else:
+                r += nx["value"]
+        return r
+
+    def update(self, key, value) -> None:
+        raise NotImplementedError
+
+    def delete(self, key, value) -> None:
+        raise NotImplementedError
+
+    def connect(self, db_name) -> None:
+        raise NotImplementedError
+
+    def disconnect(self) -> None:
+        raise NotImplementedError
+
+    def get_key_list(self) -> None:
+        raise NotImplementedError
 
 
 class Backend(object):
@@ -119,11 +212,12 @@ class Backend(object):
         elif self.backend == Backends.DYNAMO_DB:
             raise NotImplementedError("create Backends.DYNAMO_DB")
         elif self.backend == Backends.MONGODB:
-            # Mongo stores "documents" which are implemented as python dictionaries
+            # Mongo stores "documents" which are implemented as python
+            # dictionaries
             # If this fails, then start the daemon:
             # sudo systemctl status mongod)
-            document = { 'key' : ckey,
-                         'value' : cvalue }
+            document = {'key': ckey,
+                        'value': cvalue}
             self.db_con.insert_one(document)
         elif self.backend == Backends.MYSQL:
             raise NotImplementedError("create Backends.MYSQL")
@@ -149,7 +243,7 @@ class Backend(object):
         elif self.backend == Backends.DYNAMO_DB:
             raise NotImplementedError("read Backends.DYNAMO_DB")
         elif self.backend == Backends.MONGODB:
-            value = self.db_con.find_one({'key': r_key })
+            value = self.db_con.find_one({'key': r_key})
             return value
         elif self.backend == Backends.MYSQL:
             raise NotImplementedError("read Backends.MYSQL")
@@ -177,15 +271,16 @@ class Backend(object):
         """
 
         if self.backend == Backends.DICT:
-            original = self.db_con[u_key]
+            # original = self.db_con[u_key]
             self.db_con[u_key] = u_value
         elif self.backend == Backends.DYNAMO_DB:
             raise NotImplementedError
         elif self.backend == Backends.MONGODB:
             # Mongo stores "documents" which are implemented as python
             # dictionaries
-            document = {'key': u_key,
-                        'value': u_value}
+            #            document = {'key': u_key,
+            #                        'value': u_value}
+            pass
         elif self.backend == Backends.MYSQL:
             raise NotImplementedError
         elif self.backend == Backends.SHELVES:
@@ -197,7 +292,7 @@ class Backend(object):
         else:
             raise ValueError(
                 f"Backend type {self.backend} is not implemented or just wrong")
-        return original
+        return
 
     def delete(self, d_key):
         """
@@ -238,23 +333,35 @@ class Backend(object):
         con = sqlite3.connect(db_path)
         return con
 
-    @staticmethod
-    def initialize_mongodb():
+    def initialize_mongodb(self, db_name: str = "test_db"):
         """
 
+        :return:
         :rtype: pymongo.mongo_client.MongoClient    A handle to a Mongo database
         """
-        pymongo = importlib.import_module(name="pymongo", package="mongo")
-        dba = pymongo.admin
+        # Getting guidance from
+        # https://api.mongodb.com/python/current/tutorial.html
+        pymongo_mod = importlib.import_module(name="pymongo", package="mongo")
+        client = pymongo.MongoClient()
+        self.db = client[db_name]
+        self.dba = pymongo_mod.admin
         try:
-            ss = dba.command("serverStatus")
-        except pymongo.errors.ServerSelectionTimeoutError as p:
-            print("Unable to connect to the mongodb.  Try the 'sudo systemctl start mongodb' command", file=sys.stderr)
-        if ss['ok'] != 1.0:
-            print(f"The mongodb status is {ss['ok']}.  It should be 1.0.  I don't know what that means", file=sys.stderr)
-        mc = pymongo.MongoClient()
-        con = mc.kv_test
-        return con
+            ss = self.dba.command("serverStatus")
+        except pymongo_mod.errors.ServerSelectionTimeoutError as p:
+            print(
+                "Unable to connect to the mongodb.  Try the 'sudo systemctl "
+                "start mongodb' command.  Error message is "+str(p),
+                file=sys.stderr)
+            raise SystemError
+        else:
+            if ss['ok'] != 1.0:
+                print(
+                    f"The mongodb status is {ss['ok']}.  It should be 1.0.  I "
+                    f"don't know what that means",
+                    file=sys.stderr)
+            mc = pymongo.MongoClient()
+            con = mc.kv_test
+            return con
 
 
 def verify_db(backend_obj: Backend):
@@ -276,9 +383,12 @@ def verify_db(backend_obj: Backend):
 
 if "__main__" == __name__:
 
+    """This is operational, not test, software """
+
     COUNT = 100  # How many K/V pairs to generate
 
-    def run_crud_verify( vrfy_backend: Backends = Backends.DICT):
+
+    def run_crud_verify(vrfy_backend: Backends = Backends.DICT):
         """
 
         :param vrfy_backend:
@@ -288,7 +398,7 @@ if "__main__" == __name__:
         results = True
 
         bcknd = Backend(vrfy_backend)
-        for i in range(COUNT):
+        for _ in range(COUNT):
             key = uuid.uuid4()
             value = random_generator(4)
             bcknd.gold[key] = value
@@ -309,7 +419,8 @@ if "__main__" == __name__:
         print("Completed update", file=sys.stderr)
 
         if verify_db(bcknd) > 0:
-            print("SOMETHING WENT WRONG DURING THE UPDATE - PAY ATTENTION!!!!!!")
+            print(
+                "SOMETHING WENT WRONG DURING THE UPDATE - PAY ATTENTION!!!!!!")
             results = False
         print("Completed verify after update test", file=sys.stderr)
 
@@ -326,7 +437,8 @@ if "__main__" == __name__:
                 pass
             else:
                 print(
-                    "SOMETHING WENT WRONG DURING THE DELETE - PAY ATTENTION!!!!!!")
+                    "SOMETHING WENT WRONG DURING THE DELETE - PAY "
+                    "ATTENTION!!!!!!")
                 results = False
                 print(f"Reading from key {key} ")
 
@@ -341,4 +453,3 @@ if "__main__" == __name__:
     run_crud_verify(vrfy_backend=Backends.SHELVES)
     run_crud_verify(vrfy_backend=Backends.SQLLIGHT)
     run_crud_verify(vrfy_backend=Backends.TEXTFILE)
-
