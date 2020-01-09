@@ -24,8 +24,9 @@ import string
 import sys
 import uuid
 from enum import Enum, unique, auto
-import pdb
+
 import pymongo
+from pymongo import errors
 
 
 @unique
@@ -92,12 +93,19 @@ class BackendsAbstract(object):
         raise NotImplementedError
 
     def update(self, key, value) -> None:
-        """update a record or a document.  It is an error to update a
-        record or a document that already exists, if only to differentiate
-        between creating a record and updating a record"""
+        """
+        Change a record at key with a new value.  It is an error to update a
+        record that doesn't exist - this is more or less to differentiate
+        update from create.  However, there is a use case: if the caller
+        thinks they are updating an existing record, and it doesn't actually
+        exist, then that might be a symptom of a logic error in the caller
+        :param key:
+        :param value:
+        :return:
+        """
         raise NotImplementedError
 
-    def delete(self, key, value) -> None:
+    def delete(self, key) -> None:
         raise NotImplementedError
 
     def connect(self, db_name) -> None:
@@ -114,56 +122,113 @@ class BackendMongo(BackendsAbstract):
 
     def __init__(self, db_server: str = "localhost", db_port: int = 27017,
                  db_name: str = "mongo_db") -> None:
-        # I ran into this problem, db_port was a string, raised a _topography problem.
+        # I ran into this problem, db_port was a string, raised a _topography
+        # problem.
         assert isinstance(db_port, int), "db_port has to be an int"
         try:
-            self.client = pymongo.MongoClient(host=db_server, port=db_port)
+            client = pymongo.MongoClient(host=db_server, port=db_port)
         except Exception as e:
-            print(f"pymongo.MongoClient raised exception {str(e)}.  Is the server running?", file=sys.stderr )
+            print(
+                f"pymongo.MongoClient raised exception {str(e)}.  Is the "
+                f"server running?",
+                file=sys.stderr)
             raise
-        self.db_name = db_name
-        self.db = self.client[self.db_name]
-        self.posts = self.db.ports
+        try:
+            # The ismaster command is cheap and does not require auth.
+            client.admin.command('ismaster')
+        except pymongo.errors.ConnectionFailure as c:
+            print("client.admin.command('ismaster') raised a ConnectionFailure "
+                  "exception\n" + str(c), file=sys.stderr)
+            raise
+        else:
+            print("Have a good connection to the database", file=sys.stderr)
+
+        # self.db_obj = client.get_database(name=db_name)
+        # This was suggested by
+        # https://stackoverflow.com/questions/18371351/python-pymongo-insert
+        # -and-update-documents
+        try:
+            self.db_obj = client.get_database(name=db_name).create_collection(
+                name="my_collection")
+        except pymongo.errors.CollectionInvalid:
+            self.db_obj = client.get_database(name=db_name).get_collection(name="my_collection")
+        # These asserts are here to test my understanding
+        assert self.db_obj.name == db_name, \
+            f"self.db_obj.name is {self.db_obj.name} and db_name is {db_name}"
+        assert isinstance(self.db_obj, pymongo.database.Database), \
+            f"self.db_obj should be pymongo.database.Database but is {type(self.db_obj)}"
+        assert hasattr(self.db_obj, 'insert_one'), \
+            f"self.db_obj should have an insert_one attribute and doesn't"
+        sys.stderr.flush()
+        # self.posts = self.db.ports
 
     def create(self, key, value) -> None:
         """Insert a document into the database.  Mongodb looks for a special
         key, _id, which must be unique across a collection
         (this is a test case)"""
         # From
-        # https://api.mongodb.com/python/current/api/pymongo/collection.html#pymongo.collection.Collection.insert_one
+        # https://api.mongodb.com/python/current/api/pymongo/collection.html
+        # #pymongo.collection.Collection.insert_one
         document = {"_id": key, "value": value}
         print(f"Created a document object {document}", file=sys.stderr)
-        self.db[self.db_name].insert_one( document )
+        self.db_obj.insert_one(document=document)
         return None
 
     def read(self, key) -> str:
         """fetch a document from the database
         :param  key str The key to look up in the database
         """
-        print(f"Searching for _id: {key}", file=sys.stderr )
-        results = self.db[self.db_name].find({"_id": key} )
+        print(f"Searching for _id: {key}", file=sys.stderr)
+        results = self.db_obj.find({"_id": key})
         assert results is not None, "find returned a None object."
         r = ""
         while True:
             try:
                 nx = results.next()
-            except StopIteration as s:
+            except StopIteration:
                 break
             else:
                 r += nx["value"]
         return r
 
     def update(self, key, value) -> None:
-        raise NotImplementedError
+        """
+        Change a record at key with a new value.  It is an error to update a
+        record that doesn't exist - this is more or less to differentiate
+        update from create.  However, there is a use case: if the caller
+        thinks they are updating an existing record, and it doesn't actually
+        exist, then that might be a symptom of a logic error in the caller
+        :param key:
+        :param value:
+        :return:
+        """
 
-    def delete(self, key, value) -> None:
-        raise NotImplementedError
+        value = random_generator(13)
+        print(f"updating _id: {key} with {value}.", file=sys.stderr)
+        results = self.db_obj.update(filter={"_id": key},
+                                     update={"value": value}, upsert=False)
+        if results.matched_count > 1:
+            raise pymongo.errors.DuplicateKeyError
+        elif results.matched_count == 0:
+            raise pymongo.errors.InvalidName
+        else:
+            return
 
+    #    def delete(self, key) -> None:
+    #    commented out to see what happens.
+
+    # I'm not sure this is necessary.  Making the connection is done by the
+    # constructor
     def connect(self, db_name) -> None:
         raise NotImplementedError
 
     def disconnect(self) -> None:
-        raise NotImplementedError
+        """
+        Do a clean disconnect from the database
+        :return:
+        """
+        self.db_obj.close()
+        return
 
     def get_key_list(self) -> None:
         raise NotImplementedError
@@ -333,6 +398,7 @@ class Backend(object):
         con = sqlite3.connect(db_path)
         return con
 
+    '''
     def initialize_mongodb(self, db_name: str = "test_db"):
         """
 
@@ -350,7 +416,7 @@ class Backend(object):
         except pymongo_mod.errors.ServerSelectionTimeoutError as p:
             print(
                 "Unable to connect to the mongodb.  Try the 'sudo systemctl "
-                "start mongodb' command.  Error message is "+str(p),
+                "start mongodb' command.  Error message is " + str(p),
                 file=sys.stderr)
             raise SystemError
         else:
@@ -379,6 +445,7 @@ def verify_db(backend_obj: Backend):
                 f"{backend_obj.gold[k]}. ")
             bad_cntr += 1
     return bad_cntr
+'''
 
 
 if "__main__" == __name__:
@@ -394,6 +461,10 @@ if "__main__" == __name__:
         :param vrfy_backend:
         :return: True if 100% pass on all tests
         """
+
+        def verify_db(b):
+            raise NotImplementedError(b)
+
         print(f"Running CRUD verify on backend {str(vrfy_backend)}")
         results = True
 
@@ -430,7 +501,7 @@ if "__main__" == __name__:
 
         for key in bcknd.gold.keys():
             try:
-                v = bcknd.read(key)
+                bcknd.read(key)
             except KeyError:
                 # We expect a KeyError exception, because the key/value pair
                 # should have been deleted.
