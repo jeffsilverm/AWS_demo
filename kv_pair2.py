@@ -84,12 +84,31 @@ class BackendsAbstract(object):
     of these methods, then the abstract class will raise a NonImplemented
     exception """
 
+    def __init__(self, db_server: str = "localhost", db_port: int = 27017,
+                 db_name: str = "mongo_db",
+                 table_name: str = "my_collection") -> None:
+        """
+        Create a database object for Mongo
+
+        :param db_server:   str The name of the server or IP address
+        :param db_port:     int The TCP port number the server is listening to
+        :param db_name:     str The name of the database
+        :param table_name:  str The name of the collection.  The reason it's
+                                called table_name is for compatibility with SQL
+        """
+        #
+        # This is here to stop variable unused errors
+        print(db_server, db_port, db_name, table_name, file=sys.stderr)
+        return
+
     def create(self, key, value) -> None:
         """Create a record or a document"""
+        print(key, value, file=sys.stderr)
         raise NotImplementedError
 
     def read(self, key) -> None:
         """Read a record or a document"""
+        print(key, file=sys.stderr)
         raise NotImplementedError
 
     def update(self, key, value) -> None:
@@ -103,12 +122,15 @@ class BackendsAbstract(object):
         :param value:
         :return:
         """
+        print(key, value, file=sys.stderr)
         raise NotImplementedError
 
     def delete(self, key) -> None:
+        print(key, file=sys.stderr)
         raise NotImplementedError
 
     def connect(self, db_name) -> None:
+        print(db_name, file=sys.stderr)
         raise NotImplementedError
 
     def disconnect(self) -> None:
@@ -118,49 +140,220 @@ class BackendsAbstract(object):
         raise NotImplementedError
 
 
+class BackendDict(BackendsAbstract):
+
+    def __init__(self, db_server: str = "localhost", db_port: int = 27017,
+                 db_name: str = "mongo_db",
+                 table_name: str = "my_collection") -> None:
+        BackendsAbstract.__init__(self, db_server=db_server, db_port=db_port,
+                                  db_name=db_name, table_name=table_name)
+        raise NotImplementedError
+
+    def create(self, key, value) -> None:  # Dict
+        """Create a record or a document"""
+        raise NotImplementedError
+
+    def read(self, key) -> None:  # Dict
+        """Read a record or a document"""
+        raise NotImplementedError
+
+    def update(self, key, value) -> None:  # Dict
+        """
+        Change a record at key with a new value.  It is an error to update a
+        record that doesn't exist - this is more or less to differentiate
+        update from create.  However, there is a use case: if the caller
+        thinks they are updating an existing record, and it doesn't actually
+        exist, then that might be a symptom of a logic error in the caller
+        :param key:
+        :param value:
+        :return:
+        """
+        raise NotImplementedError
+
+    def delete(self, key) -> None:  # Dict
+        raise NotImplementedError
+
+    def connect(self, db_name) -> None:  # Dict
+        raise NotImplementedError
+
+    def disconnect(self) -> None:  # Dict
+        raise NotImplementedError
+
+    def get_key_list(self) -> None:  # Dict
+        raise NotImplementedError
+
+
 class BackendMongo(BackendsAbstract):
 
     def __init__(self, db_server: str = "localhost", db_port: int = 27017,
-                 db_name: str = "mongo_db") -> None:
+                 db_name: str = "mongo_db",
+                 table_name: str = "my_collection") -> None:
+        """
+        Create a database object for Mongo
+
+        :type db_port: int
+        :param db_server:   str The name of the server or IP address
+        :param db_port:     int The TCP port number the server is listening to
+        :param db_name:     str The name of the database
+        :param table_name:  str The name of the collection.  The reason it's
+                                called table_name is for compatibility with SQL
+        """
+        # This call is a bit future proofing
+        BackendsAbstract.__init__(self, db_server=db_server, db_port=db_port,
+                                  db_name=db_name, table_name=table_name)
         # I ran into this problem, db_port was a string, raised a _topography
         # problem.
         assert isinstance(db_port, int), "db_port has to be an int"
+        """
+        I got this insight from Geeks for Geeks: MongoDB python | insert(), 
+        replace_one(), replace_many().
+
+>>> from pymongo import MongoClient
+>>> conn = MongoClient() 
+>>> db = conn.database 
+>>> collection = db.my_gfg_collection
+>>> dir(conn)
+>>> type(conn.database)
+<class 'pymongo.database.Database'>
+>>> coll=db.XyZZy
+>>> dir(coll)
+['_BaseObject__codec_options', '_BaseObject__read_concern', 
+'_BaseObject__read_preference', '_BaseObject__write_concern', 
+'_Collection__create', '_Collection__create_index', '_Collection__database', 
+'_Collection__find_and_modify', '_Collection__full_name', 
+'_Collection__name', '_Collection__write_response_codec_options', '__call__', 
+'__class__', '__delattr__', '__dict__', '__dir__', '__doc__', '__eq__', 
+'__format__', '__ge__', '__getattr__', '__getattribute__', '__getitem__', 
+'__gt__', '__hash__', '__init__', '__init_subclass__', '__iter__', '__le__', 
+'__lt__', '__module__', '__ne__', '__new__', '__next__', '__reduce__', 
+'__reduce_ex__', '__repr__', '__setattr__', '__sizeof__', '__str__', 
+'__subclasshook__', '__weakref__', '_aggregate', '_aggregate_one_result', 
+'_command', '_count', '_delete', '_delete_retryable', '_insert', 
+'_insert_one', '_legacy_write', '_map_reduce', '_read_preference_for', 
+'_socket_for_reads', '_socket_for_writes', '_update', '_update_retryable', 
+'_write_concern_for', '_write_concern_for_cmd', 'aggregate', 
+'aggregate_raw_batches', 'bulk_write', 'codec_options', 'count', 
+'count_documents', 'create_index', 'create_indexes', 'database', 
+'delete_many', 'delete_one', 'distinct', 'drop', 'drop_index', 
+'drop_indexes', 'ensure_index', 'estimated_document_count', 'find', 
+'find_and_modify', 'find_one', 'find_one_and_delete', 'find_one_and_replace', 
+'find_one_and_update', 'find_raw_batches', 'full_name', 'group', 
+'index_information', 'initialize_ordered_bulk_op', 
+'initialize_unordered_bulk_op', 'inline_map_reduce', 'insert', 'insert_many', 
+'insert_one', 'list_indexes', 'map_reduce', 'name', 'next', 'options', 
+'parallel_scan', 'read_concern', 'read_preference', 'reindex', 'remove', 
+'rename', 'replace_one', 'save', 'update', 'update_many', 'update_one', 
+'watch', 'with_options', 'write_concern']
+>>> coll.name
+'XyZZy'
+>>> 
+>>> coll=db.get_collection(name="Q")
+>>> coll.name
+'Q'
+>>> coll.insert_one({"name":"Eric", "num":4 })
+<pymongo.results.InsertOneResult object at 0x7f7234a4a6e0>
+>>> coll.insert_one({"name":"Fred", "num":6 })
+<pymongo.results.InsertOneResult object at 0x7f7234a4a8c0>
+>>> dir(coll)
+['_BaseObject__codec_options', '_BaseObject__read_concern', 
+'_BaseObject__read_preference', '_BaseObject__write_concern', 
+'_Collection__create', '_Collection__create_index', '_Collection__database', 
+'_Collection__find_and_modify', '_Collection__full_name', 
+'_Collection__name', '_Collection__write_response_codec_options', '__call__', 
+'__class__', '__delattr__', '__dict__', '__dir__', '__doc__', '__eq__', 
+'__format__', '__ge__', '__getattr__', '__getattribute__', '__getitem__', 
+'__gt__', '__hash__', '__init__', '__init_subclass__', '__iter__', '__le__', 
+'__lt__', '__module__', '__ne__', '__new__', '__next__', '__reduce__', 
+'__reduce_ex__', '__repr__', '__setattr__', '__sizeof__', '__str__', 
+'__subclasshook__', '__weakref__', '_aggregate', '_aggregate_one_result', 
+'_command', '_count', '_delete', '_delete_retryable', '_insert', 
+'_insert_one', '_legacy_write', '_map_reduce', '_read_preference_for', 
+'_socket_for_reads', '_socket_for_writes', '_update', '_update_retryable', 
+'_write_concern_for', '_write_concern_for_cmd', 'aggregate', 
+'aggregate_raw_batches', 'bulk_write', 'codec_options', 'count', 
+'count_documents', 'create_index', 'create_indexes', 'database', 
+'delete_many', 'delete_one', 'distinct', 'drop', 'drop_index', 
+'drop_indexes', 'ensure_index', 'estimated_document_count', 'find', 
+'find_and_modify', 'find_one', 'find_one_and_delete', 'find_one_and_replace', 
+'find_one_and_update', 'find_raw_batches', 'full_name', 'group', 
+'index_information', 'initialize_ordered_bulk_op', 
+'initialize_unordered_bulk_op', 'inline_map_reduce', 'insert', 'insert_many', 
+'insert_one', 'list_indexes', 'map_reduce', 'name', 'next', 'options', 
+'parallel_scan', 'read_concern', 'read_preference', 'reindex', 'remove', 
+'rename', 'replace_one', 'save', 'update', 'update_many', 'update_one', 
+'watch', 'with_options', 'write_concern']
+>>> coll.find()
+<pymongo.cursor.Cursor object at 0x7f7234a26bd0>
+>>> c=coll.find()
+>>> c.next()
+{'_id': ObjectId('5e16ffa62f6d187ff431b7e0'), 'name': 'Eric', 'num': 4}
+>>> c.next()
+{'_id': ObjectId('5e16ffba2f6d187ff431b7e1'), 'name': 'Fred', 'num': 6}
+>>> c.next()
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+  File "/usr/local/lib/python3.7/dist-packages/pymongo/cursor.py", line 1164, 
+  in next
+    raise StopIteration
+StopIteration
+>>> 
+        """
+
         try:
-            client = pymongo.MongoClient(host=db_server, port=db_port)
+            self.client = pymongo.MongoClient(host=db_server, port=db_port)
         except Exception as e:
             print(
                 f"pymongo.MongoClient raised exception {str(e)}.  Is the "
                 f"server running?",
                 file=sys.stderr)
             raise
+        # This is to verify my understanding of pymongo
+        assert isinstance(self.client, pymongo.mongo_client.MongoClient), \
+            f"client is {type(self.client)}, not " \
+            "pymongo.mongo_client.MongoClient"
         try:
             # The ismaster command is cheap and does not require auth.
-            client.admin.command('ismaster')
+            self.client.admin.command('ismaster')
         except pymongo.errors.ConnectionFailure as c:
             print("client.admin.command('ismaster') raised a ConnectionFailure "
-                  "exception\n" + str(c), file=sys.stderr)
+                  "exception\nIs the server running?\nUse " +
+                  "the command 'sudo systemctl start mongodb'to start\n" +
+                  str(c), file=sys.stderr)
             raise
         else:
             print("Have a good connection to the database", file=sys.stderr)
-
-        # self.db_obj = client.get_database(name=db_name)
+        # db = conn.database
         # This was suggested by
         # https://stackoverflow.com/questions/18371351/python-pymongo-insert
         # -and-update-documents
         try:
-            self.db_obj = client.get_database(name=db_name).create_collection(
-                name="my_collection")
-        except pymongo.errors.CollectionInvalid:
-            self.db_obj = client.get_database(name=db_name).get_collection(name="my_collection")
-        # These asserts are here to test my understanding
+            self.db_obj = self.client.get_database(name=db_name)
+        except Exception as e:
+            print(f"self.client.get_database({db_name} raised an "
+                  f"{str(e)} exception", file=sys.stderr)
+            raise
+        # noinspection PyUnresolvedReferences
+        assert isinstance(self.db_obj, pymongo.database.Database), \
+            f"db_obj is type {type(self.db_obj)} not pymongo.database.Database"
+        try:
+            collection_list = self.db_obj.list_collection_names()
+            if table_name in collection_list:
+                self.coll = self.db_obj.get_collection(name=table_name)
+            else:
+                # the collection name is table_name for compatibility with SQL
+                self.coll = self.db_obj.create_collection(name=table_name)
+        except pymongo.errors.CollectionInvalid as c:
+            print(f"db_obj.create_collection({db_name} raised an"
+                  f"{str(c)} exception", file=sys.stderr)
+            raise
+            # These asserts are here to test my understanding
         assert self.db_obj.name == db_name, \
             f"self.db_obj.name is {self.db_obj.name} and db_name is {db_name}"
-        assert isinstance(self.db_obj, pymongo.database.Database), \
-            f"self.db_obj should be pymongo.database.Database but is {type(self.db_obj)}"
-        assert hasattr(self.db_obj, 'insert_one'), \
-            f"self.db_obj should have an insert_one attribute and doesn't"
-        sys.stderr.flush()
-        # self.posts = self.db.ports
+        assert self.coll.name == table_name, \
+            f"self.coll.name is {self.coll.name} and table_name is {table_name}"
+        assert hasattr(self.coll, 'insert_one'), \
+            f"self.coll should have an insert_one attribute and doesn't"
+        return
 
     def create(self, key, value) -> None:
         """Insert a document into the database.  Mongodb looks for a special
@@ -171,7 +364,7 @@ class BackendMongo(BackendsAbstract):
         # #pymongo.collection.Collection.insert_one
         document = {"_id": key, "value": value}
         print(f"Created a document object {document}", file=sys.stderr)
-        self.db_obj.insert_one(document=document)
+        self.coll.insert_one(document=document)
         return None
 
     def read(self, key) -> str:
@@ -179,7 +372,7 @@ class BackendMongo(BackendsAbstract):
         :param  key str The key to look up in the database
         """
         print(f"Searching for _id: {key}", file=sys.stderr)
-        results = self.db_obj.find({"_id": key})
+        results = self.coll.find({"_id": key})
         assert results is not None, "find returned a None object."
         r = ""
         while True:
@@ -198,21 +391,25 @@ class BackendMongo(BackendsAbstract):
         update from create.  However, there is a use case: if the caller
         thinks they are updating an existing record, and it doesn't actually
         exist, then that might be a symptom of a logic error in the caller
-        :param key:
-        :param value:
+        :param key: str         The key to update
+        :param value:   str     the value to update
         :return:
         """
-
-        value = random_generator(13)
-        print(f"updating _id: {key} with {value}.", file=sys.stderr)
-        results = self.db_obj.update(filter={"_id": key},
-                                     update={"value": value}, upsert=False)
-        if results.matched_count > 1:
-            raise pymongo.errors.DuplicateKeyError
-        elif results.matched_count == 0:
-            raise pymongo.errors.InvalidName
-        else:
-            return
+        print("!!!!!! Called update in kv_pair2 in class BackendMongo!!!!!!", file=sys.stderr)
+        sys.stderr.flush()
+        #  value = random_generator(13)  #######  ARGGGG!  How could you be so stupid!!!!
+        print(f"In kv_pair2.BackendMongo.update. Updating _id: {key} with {value}.", file=sys.stderr)
+        upd_filter = {"_id": key}
+        update = {"value": value}
+        # I got this answer, sort of, from
+        # https://github.com/mongodb-labs/mongo-rust-driver-prototype/issues/264
+        results = self.coll.update_one(filter=upd_filter,
+                                       update={"$set": update}, upsert=False)
+        assert results.matched_count == 1, \
+            f"results.matched_count should be 1, was {results.matched_count}"
+        assert results.modified_count == 1, \
+            f"results.modified_count should be 1, was {results.matched_count}"
+        return
 
     #    def delete(self, key) -> None:
     #    commented out to see what happens.
@@ -227,7 +424,15 @@ class BackendMongo(BackendsAbstract):
         Do a clean disconnect from the database
         :return:
         """
-        self.db_obj.close()
+        if hasattr(self.db_obj, "close"):
+            print("self.db_obj.close() has the close method", file=sys.stderr)
+            self.db_obj.close()
+        elif hasattr(self.coll, "close"):
+            print("self.coll.close() has the close method", file=sys.stderr)
+            self.coll.close()
+        else:
+            print("self.client.close() has the close method", file=sys.stderr)
+            self.client.close()
         return
 
     def get_key_list(self) -> None:
@@ -253,10 +458,11 @@ class Backend(object):
             db_con = self.initialize_sqllite(db_path=default_path)
 
         elif self.backend == Backends.MONGODB:
-            db_con = self.initialize_mongodb()
+            db_con = None  # self.initialize_mongodb()
             print(
                 f"In kv_pair2.py: The type of db_con is {type(db_con)} "
                 f"or {str(type(db_con))}", file=sys.stderr)
+            raise AssertionError("Not sure how you got here, but you did")
         else:
             raise NotImplementedError(f"backend type {str(self.backend)}.")
 
@@ -322,7 +528,7 @@ class Backend(object):
             raise ValueError(
                 f"Backend type {self.backend} is not implemented or just wrong")
 
-    def update(self, u_key, u_value):
+    def update1(self, u_key, u_value):
         """
 
         :param u_key: str: the key to search for
@@ -334,7 +540,7 @@ class Backend(object):
         update a non-existant key/value pair,
         then it can call read and let it raise an assertion
         """
-
+        print("+++++ in update1 not sure how or why ++++", file=sys.stderr)
         if self.backend == Backends.DICT:
             # original = self.db_con[u_key]
             self.db_con[u_key] = u_value
@@ -486,7 +692,7 @@ if "__main__" == __name__:
         for key in bcknd.gold.keys():
             value = random_generator(4)
             bcknd.gold[key] = value
-            bcknd.update(key, value)
+            bcknd.update1(key, value)
         print("Completed update", file=sys.stderr)
 
         if verify_db(bcknd) > 0:
