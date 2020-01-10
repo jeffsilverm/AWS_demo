@@ -39,6 +39,7 @@ class MyKvPair(object):
             self.be_dbms.create(key, value)
 
     def test_create_and_recover_key(self, key, value):
+        # Step into create ======================== step into create
         self.be_dbms.create(key, value)
         returned_value = self.be_dbms.read(key)
         assert (value == returned_value), \
@@ -60,11 +61,22 @@ class MyKvPair(object):
         key = random_string(6)
         original_value = random_string(11)
         self.be_dbms.create(key=key, value=original_value)
-        value = random_string(11)
-        self.be_dbms.update(key=key, value=value)
+        print("In test_kvpair2.MyKvPair.test_update.\n"
+              f"Just created a document with key {key} "
+              f"and value {original_value}.", file=sys.stderr)
+        new_value = random_string(11)
+        self.be_dbms.update(key=key, value=new_value)
+        print(f"Just updated {key} with {new_value}.", file=sys.stderr)
         answer = self.be_dbms.read(key=key)
-        assert value == answer, \
-            f"After updating key {key} with value {value}, read back " \
+        if answer == new_value:
+            print("Updated successfully", file=sys.stderr)
+        elif answer == original_value:
+            print("Did not update - the original value is still there.",
+                  file=sys.stderr)
+        else:
+            print(f"The answer is {answer}.", file=sys.stderr)
+        assert new_value == answer, \
+            f"After updating key {key} with new_value {new_value}, read back " \
             f"{answer}. The original value was {original_value}."
         return
 
@@ -86,10 +98,9 @@ class MyKvPair(object):
             f"readback value is {answer}"
         self.be_dbms.delete(key=key)
         with pytest.raises(expected_exception=Exception) as e:
-            answer = self.be_dbms.read(key=key)
-        print(f"read raised the {str(e)} exception as expected")
-
-
+            self.be_dbms.read(key=key)
+        print(f"read raised the {str(e)} exception as expected",
+              file=sys.stderr)
 
     def test_update_non_existent_keys(self) -> None:
         key = random_string(6)
@@ -99,6 +110,9 @@ class MyKvPair(object):
         print("After trying to update a non-existance key, update raised a "
               f"a {str(e)} exception, as expected", file=sys.stderr)
         return
+
+    def test_get_key_list(self, key_list):
+        pass
 
     def test_read_after_disconnect(self) -> None:
         pass
@@ -177,7 +191,7 @@ def test_backend(select_backend):
     #          file=sys.stderr)
 
     be_obj = select_backend
-    print(f"The type of the backend object (be_obj) is {type(be_obj)}." \
+    print(f"The type of the backend object (be_obj) is {type(be_obj)}." 
           f"The value of the backend object is {str(be_obj)}.", file=sys.stderr)
 
     key_list = list()
