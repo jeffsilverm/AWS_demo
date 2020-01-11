@@ -12,7 +12,7 @@ def random_string(length) -> str:
                    for _ in range(length))  # _ is a variable is not used
 
 
-class MyKvPair(object):
+class TestMyKvPair(object):
 
     def __init__(self, be_desc) -> None:
         """
@@ -61,7 +61,7 @@ class MyKvPair(object):
         key = random_string(6)
         original_value = random_string(11)
         self.be_dbms.create(key=key, value=original_value)
-        print("In test_kvpair2.MyKvPair.test_update.\n"
+        print("In test_kvpair2.TestMyKvPair.test_update.\n"
               f"Just created a document with key {key} "
               f"and value {original_value}.", file=sys.stderr)
         new_value = random_string(11)
@@ -173,14 +173,14 @@ class TestBackends(object):
 
 
 @pytest.fixture(params=[kv_pair2.Backends.MONGODB])
-def select_backend(request: kv_pair2.Backends) -> MyKvPair:
+def select_backend(request: kv_pair2.Backends) -> TestMyKvPair:
     """ This method tests a backend given by be
     :param  request kv_pair2.Backends    the backend to test
     """
     assert isinstance(request.param, kv_pair2.Backends), \
         f"request.param is type {type(request.param)}, " \
         f"but should really be an instance of kv_pair2.Backends"
-    backend_obj = MyKvPair(be_desc=request.param)
+    backend_obj = TestMyKvPair(be_desc=request.param)
     return backend_obj
 
 
