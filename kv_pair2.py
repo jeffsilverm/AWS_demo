@@ -371,9 +371,10 @@ StopIteration
         """fetch a document from the database
         :param  key str The key to look up in the database
         """
-        print(f"Searching for _id: {key}", file=sys.stderr)
+        print(f"Searching for _id: {key}. ", file=sys.stderr, end='')
         results = self.coll.find({"_id": key})
         assert results is not None, "find returned a None object."
+        print("found it. ", file=sys.stderr, end='')
         r = ""
         while True:
             try:
@@ -382,6 +383,7 @@ StopIteration
                 break
             else:
                 r += nx["value"]
+        print(r, file=sys.stderr)
         return r
 
     def update(self, key, value) -> None:
@@ -411,13 +413,20 @@ StopIteration
             f"results.modified_count should be 1, was {results.matched_count}"
         return
 
-    #    def delete(self, key) -> None:
-    #    commented out to see what happens.
+    def delete(self, key) -> None:
+        """
+        Delete the document pointed to by key
+        :param key: str the key of the document to delete
+        :return:
+        """
+        self.coll.delete_one(filter={"_id": key} )
+        return
+
 
     # I'm not sure this is necessary.  Making the connection is done by the
-    # constructor
+    # constructor.  However, it's there and it does nothing
     def connect(self, db_name) -> None:
-        raise NotImplementedError
+        pass
 
     def disconnect(self) -> None:
         """
