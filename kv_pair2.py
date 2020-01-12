@@ -83,10 +83,17 @@ class BackendsAbstract(object):
     class has to implement.  If a backend class does not implement one
     of these methods, then the abstract class will raise a NonImplemented
     exception """
-
+    # It is inappropriate to put defaults here - they should go in a real
+    # not an abstract class, because they will be different for each
+    # real class
+    """
     def __init__(self, db_server: str = "localhost", db_port: int = 27017,
                  db_name: str = "mongo_db",
                  table_name: str = "my_collection") -> None:
+    """
+
+    def __init__(self, db_server: str, db_port: int, db_name: str,
+                 table_name: str) -> None:
         """
         Create a database object for Mongo
 
@@ -99,19 +106,19 @@ class BackendsAbstract(object):
         #
         # This is here to stop variable unused errors
         print(db_server, db_port, db_name, table_name, file=sys.stderr)
-        return
+        print(f"The type of self is {type(self)}")
 
-    def create(self, key, value) -> None:
+    def create(self, key, value) -> None:  # class BackendsAbstract
         """Create a record or a document"""
         print(key, value, file=sys.stderr)
         raise NotImplementedError
 
-    def read(self, key) -> None:
+    def read(self, key) -> None:  # class BackendsAbstract
         """Read a record or a document"""
         print(key, file=sys.stderr)
         raise NotImplementedError
 
-    def update(self, key, value) -> None:
+    def update(self, key, value) -> None:  # class BackendsAbstract
         """
         Change a record at key with a new value.  It is an error to update a
         record that doesn't exist - this is more or less to differentiate
@@ -125,15 +132,15 @@ class BackendsAbstract(object):
         print(key, value, file=sys.stderr)
         raise NotImplementedError
 
-    def delete(self, key) -> None:
+    def delete(self, key) -> None:  # class BackendsAbstract
         print(key, file=sys.stderr)
         raise NotImplementedError
 
-    def connect(self, db_name) -> None:
+    def connect(self, db_name) -> None:  # class BackendsAbstract
         print(db_name, file=sys.stderr)
         raise NotImplementedError
 
-    def disconnect(self) -> None:
+    def disconnect(self) -> None:  # class BackendsAbstract
         raise NotImplementedError
 
     def get_key_list(self) -> None:
@@ -149,15 +156,15 @@ class BackendDict(BackendsAbstract):
                                   db_name=db_name, table_name=table_name)
         raise NotImplementedError
 
-    def create(self, key, value) -> None:  # Dict
+    def create(self, key, value) -> None:  # class BackendDict
         """Create a record or a document"""
         raise NotImplementedError
 
-    def read(self, key) -> None:  # Dict
+    def read(self, key) -> None:  # class BackendDict
         """Read a record or a document"""
         raise NotImplementedError
 
-    def update(self, key, value) -> None:  # Dict
+    def update(self, key, value) -> None:  # class BackendDict
         """
         Change a record at key with a new value.  It is an error to update a
         record that doesn't exist - this is more or less to differentiate
@@ -168,26 +175,39 @@ class BackendDict(BackendsAbstract):
         :param value:
         :return:
         """
+        raise NotImplementedError  # class BackendDict
+
+    def delete(self, key) -> None:  # class BackendDict
         raise NotImplementedError
 
-    def delete(self, key) -> None:  # Dict
+    def connect(self, db_name) -> None:  # class BackendDict
         raise NotImplementedError
 
-    def connect(self, db_name) -> None:  # Dict
+    def disconnect(self) -> None:  # class BackendDict
         raise NotImplementedError
 
-    def disconnect(self) -> None:  # Dict
-        raise NotImplementedError
-
-    def get_key_list(self) -> None:  # Dict
+    def get_key_list(self) -> None:  # class BackendDict
         raise NotImplementedError
 
 
 class BackendMongo(BackendsAbstract):
 
-    def __init__(self, db_server: str = "localhost", db_port: int = 27017,
-                 db_name: str = "mongo_db",
-                 table_name: str = "my_collection") -> None:
+    # This is necessary because one of the generic operations
+    # you do on a database is connect to it
+    def connect(self, db_server: str = "localhost", db_port: int = 27017,
+                # BackendMongo
+                db_name: str = "mongo_db",
+                table_name: str = "my_collection") -> None:
+
+        # Creating a BackendMongo object is *not* generic.  However, the
+        # nature of the object is hidden inside the BackendMongo class
+        self.__init__(db_server=db_server, db_port=db_port,
+                      db_name=db_name,
+                      table_name=table_name)
+
+        pass
+
+    def __init__(self, db_server, db_port, db_name, table_name) -> None:
         """
         Create a database object for Mongo
 
@@ -204,101 +224,9 @@ class BackendMongo(BackendsAbstract):
         # I ran into this problem, db_port was a string, raised a _topography
         # problem.
         assert isinstance(db_port, int), "db_port has to be an int"
-        """
-        I got this insight from Geeks for Geeks: MongoDB python | insert(), 
-        replace_one(), replace_many().
 
->>> from pymongo import MongoClient
->>> conn = MongoClient() 
->>> db = conn.database 
->>> collection = db.my_gfg_collection
->>> dir(conn)
->>> type(conn.database)
-<class 'pymongo.database.Database'>
->>> coll=db.XyZZy
->>> dir(coll)
-['_BaseObject__codec_options', '_BaseObject__read_concern', 
-'_BaseObject__read_preference', '_BaseObject__write_concern', 
-'_Collection__create', '_Collection__create_index', '_Collection__database', 
-'_Collection__find_and_modify', '_Collection__full_name', 
-'_Collection__name', '_Collection__write_response_codec_options', '__call__', 
-'__class__', '__delattr__', '__dict__', '__dir__', '__doc__', '__eq__', 
-'__format__', '__ge__', '__getattr__', '__getattribute__', '__getitem__', 
-'__gt__', '__hash__', '__init__', '__init_subclass__', '__iter__', '__le__', 
-'__lt__', '__module__', '__ne__', '__new__', '__next__', '__reduce__', 
-'__reduce_ex__', '__repr__', '__setattr__', '__sizeof__', '__str__', 
-'__subclasshook__', '__weakref__', '_aggregate', '_aggregate_one_result', 
-'_command', '_count', '_delete', '_delete_retryable', '_insert', 
-'_insert_one', '_legacy_write', '_map_reduce', '_read_preference_for', 
-'_socket_for_reads', '_socket_for_writes', '_update', '_update_retryable', 
-'_write_concern_for', '_write_concern_for_cmd', 'aggregate', 
-'aggregate_raw_batches', 'bulk_write', 'codec_options', 'count', 
-'count_documents', 'create_index', 'create_indexes', 'database', 
-'delete_many', 'delete_one', 'distinct', 'drop', 'drop_index', 
-'drop_indexes', 'ensure_index', 'estimated_document_count', 'find', 
-'find_and_modify', 'find_one', 'find_one_and_delete', 'find_one_and_replace', 
-'find_one_and_update', 'find_raw_batches', 'full_name', 'group', 
-'index_information', 'initialize_ordered_bulk_op', 
-'initialize_unordered_bulk_op', 'inline_map_reduce', 'insert', 'insert_many', 
-'insert_one', 'list_indexes', 'map_reduce', 'name', 'next', 'options', 
-'parallel_scan', 'read_concern', 'read_preference', 'reindex', 'remove', 
-'rename', 'replace_one', 'save', 'update', 'update_many', 'update_one', 
-'watch', 'with_options', 'write_concern']
->>> coll.name
-'XyZZy'
->>> 
->>> coll=db.get_collection(name="Q")
->>> coll.name
-'Q'
->>> coll.insert_one({"name":"Eric", "num":4 })
-<pymongo.results.InsertOneResult object at 0x7f7234a4a6e0>
->>> coll.insert_one({"name":"Fred", "num":6 })
-<pymongo.results.InsertOneResult object at 0x7f7234a4a8c0>
->>> dir(coll)
-['_BaseObject__codec_options', '_BaseObject__read_concern', 
-'_BaseObject__read_preference', '_BaseObject__write_concern', 
-'_Collection__create', '_Collection__create_index', '_Collection__database', 
-'_Collection__find_and_modify', '_Collection__full_name', 
-'_Collection__name', '_Collection__write_response_codec_options', '__call__', 
-'__class__', '__delattr__', '__dict__', '__dir__', '__doc__', '__eq__', 
-'__format__', '__ge__', '__getattr__', '__getattribute__', '__getitem__', 
-'__gt__', '__hash__', '__init__', '__init_subclass__', '__iter__', '__le__', 
-'__lt__', '__module__', '__ne__', '__new__', '__next__', '__reduce__', 
-'__reduce_ex__', '__repr__', '__setattr__', '__sizeof__', '__str__', 
-'__subclasshook__', '__weakref__', '_aggregate', '_aggregate_one_result', 
-'_command', '_count', '_delete', '_delete_retryable', '_insert', 
-'_insert_one', '_legacy_write', '_map_reduce', '_read_preference_for', 
-'_socket_for_reads', '_socket_for_writes', '_update', '_update_retryable', 
-'_write_concern_for', '_write_concern_for_cmd', 'aggregate', 
-'aggregate_raw_batches', 'bulk_write', 'codec_options', 'count', 
-'count_documents', 'create_index', 'create_indexes', 'database', 
-'delete_many', 'delete_one', 'distinct', 'drop', 'drop_index', 
-'drop_indexes', 'ensure_index', 'estimated_document_count', 'find', 
-'find_and_modify', 'find_one', 'find_one_and_delete', 'find_one_and_replace', 
-'find_one_and_update', 'find_raw_batches', 'full_name', 'group', 
-'index_information', 'initialize_ordered_bulk_op', 
-'initialize_unordered_bulk_op', 'inline_map_reduce', 'insert', 'insert_many', 
-'insert_one', 'list_indexes', 'map_reduce', 'name', 'next', 'options', 
-'parallel_scan', 'read_concern', 'read_preference', 'reindex', 'remove', 
-'rename', 'replace_one', 'save', 'update', 'update_many', 'update_one', 
-'watch', 'with_options', 'write_concern']
->>> coll.find()
-<pymongo.cursor.Cursor object at 0x7f7234a26bd0>
->>> c=coll.find()
->>> c.next()
-{'_id': ObjectId('5e16ffa62f6d187ff431b7e0'), 'name': 'Eric', 'num': 4}
->>> c.next()
-{'_id': ObjectId('5e16ffba2f6d187ff431b7e1'), 'name': 'Fred', 'num': 6}
->>> c.next()
-Traceback (most recent call last):
-  File "<stdin>", line 1, in <module>
-  File "/usr/local/lib/python3.7/dist-packages/pymongo/cursor.py", line 1164, 
-  in next
-    raise StopIteration
-StopIteration
->>> 
-        """
-
+        # There is a very lengthy comment on how Mongo works at the bottom of
+        # this file
         try:
             self.client = pymongo.MongoClient(host=db_server, port=db_port)
         except Exception as e:
@@ -397,10 +325,15 @@ StopIteration
         :param value:   str     the value to update
         :return:
         """
-        print("!!!!!! Called update in kv_pair2 in class BackendMongo!!!!!!", file=sys.stderr)
+        print("!!!!!! Called update in kv_pair2 in class BackendMongo!!!!!!",
+              file=sys.stderr)
         sys.stderr.flush()
-        #  value = random_generator(13)  #######  ARGGGG!  How could you be so stupid!!!!
-        print(f"In kv_pair2.BackendMongo.update. Updating _id: {key} with {value}.", file=sys.stderr)
+        #  value = random_generator(13)  #######  ARGGGG!  How could you be
+        #  so stupid!!!!
+        print(
+            f"In kv_pair2.BackendMongo.update. Updating _id: {key} with "
+            f"{value}.",
+            file=sys.stderr)
         upd_filter = {"_id": key}
         update = {"value": value}
         # I got this answer, sort of, from
@@ -419,14 +352,8 @@ StopIteration
         :param key: str the key of the document to delete
         :return:
         """
-        self.coll.delete_one(filter={"_id": key} )
+        self.coll.delete_one(filter={"_id": key})
         return
-
-
-    # I'm not sure this is necessary.  Making the connection is done by the
-    # constructor.  However, it's there and it does nothing
-    def connect(self, db_name) -> None:
-        pass
 
     def disconnect(self) -> None:
         """
@@ -677,8 +604,9 @@ if "__main__" == __name__:
         :return: True if 100% pass on all tests
         """
 
-        def verify_db(b):
-            raise NotImplementedError(b)
+        assert isinstance(vrfy_backend, Backends ), \
+            print(f"vrfy_backend is type {type(vrfy_backend)},"
+                  f"should be an instance of Backends", file=sys.stderr)
 
         print(f"Running CRUD verify on backend {str(vrfy_backend)}")
         results = True
@@ -732,10 +660,108 @@ if "__main__" == __name__:
         return results
 
 
-    run_crud_verify(vrfy_backend=Backends.DICT)
-    # run_crud_verify(vrfy_backend=Backends.DYNAMO_DB)
+#    run_crud_verify(vrfy_backend=Backends.DICT)
+#    run_crud_verify(vrfy_backend=Backends.DYNAMO_DB)
     run_crud_verify(vrfy_backend=Backends.MONGODB)
-    run_crud_verify(vrfy_backend=Backends.MYSQL)
-    run_crud_verify(vrfy_backend=Backends.SHELVES)
-    run_crud_verify(vrfy_backend=Backends.SQLLIGHT)
-    run_crud_verify(vrfy_backend=Backends.TEXTFILE)
+#    run_crud_verify(vrfy_backend=Backends.MYSQL)
+#    run_crud_verify(vrfy_backend=Backends.SHELVES)
+#    run_crud_verify(vrfy_backend=Backends.SQLLIGHT)
+#    run_crud_verify(vrfy_backend=Backends.TEXTFILE)
+
+    # =================================================
+    """
+     A very lengthy comment on how Mongo works
+
+     I got this insight from Geeks for Geeks: MongoDB python | insert(), 
+     replace_one(), replace_many().
+
+>>> from pymongo import MongoClient
+>>> conn = MongoClient() 
+>>> db = conn.database 
+>>> collection = db.my_gfg_collection
+>>> dir(conn)
+>>> type(conn.database)
+<class 'pymongo.database.Database'>
+>>> coll=db.XyZZy
+>>> dir(coll)
+['_BaseObject__codec_options', '_BaseObject__read_concern', 
+'_BaseObject__read_preference', '_BaseObject__write_concern', 
+'_Collection__create', '_Collection__create_index', '_Collection__database', 
+'_Collection__find_and_modify', '_Collection__full_name', 
+'_Collection__name', '_Collection__write_response_codec_options', '__call__', 
+'__class__', '__delattr__', '__dict__', '__dir__', '__doc__', '__eq__', 
+'__format__', '__ge__', '__getattr__', '__getattribute__', '__getitem__', 
+'__gt__', '__hash__', '__init__', '__init_subclass__', '__iter__', '__le__', 
+'__lt__', '__module__', '__ne__', '__new__', '__next__', '__reduce__', 
+'__reduce_ex__', '__repr__', '__setattr__', '__sizeof__', '__str__', 
+'__subclasshook__', '__weakref__', '_aggregate', '_aggregate_one_result', 
+'_command', '_count', '_delete', '_delete_retryable', '_insert', 
+'_insert_one', '_legacy_write', '_map_reduce', '_read_preference_for', 
+'_socket_for_reads', '_socket_for_writes', '_update', '_update_retryable', 
+'_write_concern_for', '_write_concern_for_cmd', 'aggregate', 
+'aggregate_raw_batches', 'bulk_write', 'codec_options', 'count', 
+'count_documents', 'create_index', 'create_indexes', 'database', 
+'delete_many', 'delete_one', 'distinct', 'drop', 'drop_index', 
+'drop_indexes', 'ensure_index', 'estimated_document_count', 'find', 
+'find_and_modify', 'find_one', 'find_one_and_delete', 'find_one_and_replace', 
+'find_one_and_update', 'find_raw_batches', 'full_name', 'group', 
+'index_information', 'initialize_ordered_bulk_op', 
+'initialize_unordered_bulk_op', 'inline_map_reduce', 'insert', 'insert_many', 
+'insert_one', 'list_indexes', 'map_reduce', 'name', 'next', 'options', 
+'parallel_scan', 'read_concern', 'read_preference', 'reindex', 'remove', 
+'rename', 'replace_one', 'save', 'update', 'update_many', 'update_one', 
+'watch', 'with_options', 'write_concern']
+>>> coll.name
+'XyZZy'
+>>> 
+>>> coll=db.get_collection(name="Q")
+>>> coll.name
+'Q'
+>>> coll.insert_one({"name":"Eric", "num":4 })
+<pymongo.results.InsertOneResult object at 0x7f7234a4a6e0>
+>>> coll.insert_one({"name":"Fred", "num":6 })
+<pymongo.results.InsertOneResult object at 0x7f7234a4a8c0>
+>>> dir(coll)
+['_BaseObject__codec_options', '_BaseObject__read_concern', 
+'_BaseObject__read_preference', '_BaseObject__write_concern', 
+'_Collection__create', '_Collection__create_index', '_Collection__database', 
+'_Collection__find_and_modify', '_Collection__full_name', 
+'_Collection__name', '_Collection__write_response_codec_options', '__call__', 
+'__class__', '__delattr__', '__dict__', '__dir__', '__doc__', '__eq__', 
+'__format__', '__ge__', '__getattr__', '__getattribute__', '__getitem__', 
+'__gt__', '__hash__', '__init__', '__init_subclass__', '__iter__', '__le__', 
+'__lt__', '__module__', '__ne__', '__new__', '__next__', '__reduce__', 
+'__reduce_ex__', '__repr__', '__setattr__', '__sizeof__', '__str__', 
+'__subclasshook__', '__weakref__', '_aggregate', '_aggregate_one_result', 
+'_command', '_count', '_delete', '_delete_retryable', '_insert', 
+'_insert_one', '_legacy_write', '_map_reduce', '_read_preference_for', 
+'_socket_for_reads', '_socket_for_writes', '_update', '_update_retryable', 
+'_write_concern_for', '_write_concern_for_cmd', 'aggregate', 
+'aggregate_raw_batches', 'bulk_write', 'codec_options', 'count', 
+'count_documents', 'create_index', 'create_indexes', 'database', 
+'delete_many', 'delete_one', 'distinct', 'drop', 'drop_index', 
+'drop_indexes', 'ensure_index', 'estimated_document_count', 'find', 
+'find_and_modify', 'find_one', 'find_one_and_delete', 'find_one_and_replace', 
+'find_one_and_update', 'find_raw_batches', 'full_name', 'group', 
+'index_information', 'initialize_ordered_bulk_op', 
+'initialize_unordered_bulk_op', 'inline_map_reduce', 'insert', 'insert_many', 
+'insert_one', 'list_indexes', 'map_reduce', 'name', 'next', 'options', 
+'parallel_scan', 'read_concern', 'read_preference', 'reindex', 'remove', 
+'rename', 'replace_one', 'save', 'update', 'update_many', 'update_one', 
+'watch', 'with_options', 'write_concern']
+>>> coll.find()
+<pymongo.cursor.Cursor object at 0x7f7234a26bd0>
+>>> c=coll.find()
+>>> c.next()
+{'_id': ObjectId('5e16ffa62f6d187ff431b7e0'), 'name': 'Eric', 'num': 4}
+>>> c.next()
+{'_id': ObjectId('5e16ffba2f6d187ff431b7e1'), 'name': 'Fred', 'num': 6}
+>>> c.next()
+Traceback (most recent call last):
+File "<stdin>", line 1, in <module>
+File "/usr/local/lib/python3.7/dist-packages/pymongo/cursor.py", line 1164, 
+in next
+ raise StopIteration
+StopIteration
+>>> 
+     """
