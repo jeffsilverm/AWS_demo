@@ -189,6 +189,8 @@ class BackendDict(BackendsAbstract):
     def get_key_list(self) -> None:  # class BackendDict
         raise NotImplementedError
 
+class BackendMySql(BackendsAbstract):
+    pass
 
 class BackendMongo(BackendsAbstract):
 
