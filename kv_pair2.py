@@ -20,10 +20,12 @@ import importlib
 import json
 import os
 import random
+import shelve
 import string
 import sys
 import uuid
 from enum import Enum, unique, auto
+from string import ascii_letters
 
 import pymongo
 from pymongo import errors
@@ -82,7 +84,12 @@ class BackendsAbstract(object):
     """This is an abstract class that defines the methods that a backend
     class has to implement.  If a backend class does not implement one
     of these methods, then the abstract class will raise a NonImplemented
-    exception """
+    exception.
+    This class has a method for all of the database options.  There is
+    CRUD - Create, Read, Update, and Delete.  But these are also connect,
+    disconnect, and settings methods.  Creating a Backend object is essentially
+    a connect, so I didn't create a connect method.
+     """
     # It is inappropriate to put defaults here - they should go in a real
     # not an abstract class, because they will be different for each
     # real class
@@ -92,10 +99,12 @@ class BackendsAbstract(object):
                  table_name: str = "my_collection") -> None:
     """
 
-    def __init__(self, db_server: str, db_port: int, db_name: str,
-                 table_name: str) -> None:
+    def __init__(self, db_name: str,
+                 db_server: str = None, db_port: int = -1,
+                 table_name: str = None) -> None:
         """
-        Create a database object for Mongo
+        Create a database object.  Generally, this will be called by the
+        connect method.
 
         :param db_server:   str The name of the server or IP address
         :param db_port:     int The TCP port number the server is listening to
@@ -104,12 +113,17 @@ class BackendsAbstract(object):
                                 called table_name is for compatibility with SQL
         """
         #
-        # This is here to stop variable unused errors
+        # This is here to stop variable unused errors in pycharm
         print(db_server, db_port, db_name, table_name, file=sys.stderr)
         print(f"The type of self is {type(self)}")
+        # Actually, now that I have the following statement, I can get rid of
+        # those upper 2 statements, but I am leaving them in for now.
+        self.connected = True
 
     def create(self, key, value) -> None:  # class BackendsAbstract
-        """Create a record or a document"""
+        """Create a record or a document.  It is an error to create a record
+        that already exists.  Enforcement of this rule is left to the
+        backend and testing this rule is a requirement for the test software """
         print(key, value, file=sys.stderr)
         raise NotImplementedError
 
@@ -141,24 +155,41 @@ class BackendsAbstract(object):
         raise NotImplementedError
 
     def disconnect(self) -> None:  # class BackendsAbstract
+        self.connected = False
         raise NotImplementedError
 
     def get_key_list(self) -> None:
         raise NotImplementedError
 
+    def settings(self) -> None:
+        raise NotImplementedError
+
 
 class BackendDict(BackendsAbstract):
+    """
+    Connect the KV server to a dictionary by loading a shelf file
+    """
 
-    def __init__(self, db_server: str = "localhost", db_port: int = 27017,
-                 db_name: str = "mongo_db",
-                 table_name: str = "my_collection") -> None:
-        BackendsAbstract.__init__(self, db_server=db_server, db_port=db_port,
-                                  db_name=db_name, table_name=table_name)
-        raise NotImplementedError
+    def settings(self) -> None:
+        pass
+
+    def __init__(self, db_name: str = "dict_db",
+                 ) -> None:
+        BackendsAbstract.__init__(self, db_name=db_name)
+        self.db_name = db_name
+        if os.path.exists(db_name) and os.path.isfile(db_name):
+            # The persistent store of a dictionary is a pickle file
+            with shelve.open(db_name, 'c') as shelf:
+                self.dict = shelf.copy()
+        else:
+            self.dict = dict()
+        self.connected = True
 
     def create(self, key, value) -> None:  # class BackendDict
         """Create a record or a document"""
-        raise NotImplementedError
+        if key in self.dict:
+            raise ValueError(f"key {key} is already in dictionary.  " 
+                             f"Value is {self.dict[key]}.")
 
     def read(self, key) -> None:  # class BackendDict
         """Read a record or a document"""
@@ -184,6 +215,7 @@ class BackendDict(BackendsAbstract):
         raise NotImplementedError
 
     def disconnect(self) -> None:  # class BackendDict
+        self.connected = False
         raise NotImplementedError
 
     def get_key_list(self) -> None:  # class BackendDict
@@ -191,6 +223,9 @@ class BackendDict(BackendsAbstract):
 
 
 class BackendMongo(BackendsAbstract):
+
+    def settings(self) -> None:
+        pass
 
     # This is necessary because one of the generic operations
     # you do on a database is connect to it
@@ -361,10 +396,14 @@ class BackendMongo(BackendsAbstract):
         :return:
         """
         if hasattr(self.db_obj, "close"):
-            print("self.db_obj.close() has the close method", file=sys.stderr)
-            self.db_obj.close()
-        elif hasattr(self.coll, "close"):
-            print("self.coll.close() has the close method", file=sys.stderr)
+            print("self.db_obj has a close attribute", file=sys.stderr)
+            if callable(self.db_obj.close):
+                print("self.db_obj.close is callable", file=sys.stderr)
+                self.db_obj.close()
+                self.connected = False
+                return
+        if hasattr(self.coll, "close"):
+            print("self.coll.close() a close attribute", file=sys.stderr)
             self.coll.close()
         else:
             print("self.client.close() has the close method", file=sys.stderr)
@@ -394,16 +433,19 @@ class Backend(object):
             db_con = self.initialize_sqllite(db_path=default_path)
 
         elif self.backend == Backends.MONGODB:
-            db_con = None  # self.initialize_mongodb()
+            db_con = BackendMongo(db_server="localhost", db_port=27017,
+                                  db_name="Marvin", table_name="Richard")
+
             print(
                 f"In kv_pair2.py: The type of db_con is {type(db_con)} "
                 f"or {str(type(db_con))}", file=sys.stderr)
-            raise AssertionError("Not sure how you got here, but you did")
+
         else:
             raise NotImplementedError(f"backend type {str(self.backend)}.")
 
         self.db_con = db_con
         self.gold = dict()
+        self.connected = True
 
     # CRUD - Create, Read, Update, Delete
     def create(self, ckey, cvalue):
@@ -597,6 +639,39 @@ if "__main__" == __name__:
     COUNT = 100  # How many K/V pairs to generate
 
 
+    def random_string(length) -> str:
+        # A generator
+        return ''.join(random.choice(ascii_letters)
+                       for _ in range(length))  # _ is a variable is not used
+
+    def verify_crud( db ):
+
+        kv_pairs = {}
+        for m in range(4):
+            key = random_string(5)
+            value = random_string(8)
+            kv_pairs[key] = value
+            db.create(key=key, value=value)
+        for k in kv_pairs.keys():
+            value = db.read(key=k)
+            assert value == kv_pairs[k], \
+                           f"db.read should have returned {kv_pairs[k]}, "\
+                            f"but actually returned {value}"
+        # Keep going, we're not done yet with verify_crud
+
+    db_mongo = BackendMongo(db_server="localhost", db_port=27017,
+                            db_name="Eric", table_name="tab34")
+    verify_crud( db_mongo )
+    db_mongo.disconnect()
+    del db_mongo
+
+    db_dict = BackendDict()
+    verify_crud( db_dict )
+    db_dict.disconnect()
+
+    sys.exit(0)
+
+
     def run_crud_verify(vrfy_backend: Backends = Backends.DICT):
         """
 
@@ -604,7 +679,12 @@ if "__main__" == __name__:
         :return: True if 100% pass on all tests
         """
 
-        assert isinstance(vrfy_backend, Backends ), \
+        def verify_db(bcknd_) -> int:
+            # This is to protect against variable unused errors
+            assert bcknd_
+            return 0
+
+        assert isinstance(vrfy_backend, Backends), \
             print(f"vrfy_backend is type {type(vrfy_backend)},"
                   f"should be an instance of Backends", file=sys.stderr)
 
@@ -660,13 +740,13 @@ if "__main__" == __name__:
         return results
 
 
-#    run_crud_verify(vrfy_backend=Backends.DICT)
-#    run_crud_verify(vrfy_backend=Backends.DYNAMO_DB)
+    #    run_crud_verify(vrfy_backend=Backends.DICT)
+    #    run_crud_verify(vrfy_backend=Backends.DYNAMO_DB)
     run_crud_verify(vrfy_backend=Backends.MONGODB)
-#    run_crud_verify(vrfy_backend=Backends.MYSQL)
-#    run_crud_verify(vrfy_backend=Backends.SHELVES)
-#    run_crud_verify(vrfy_backend=Backends.SQLLIGHT)
-#    run_crud_verify(vrfy_backend=Backends.TEXTFILE)
+    #    run_crud_verify(vrfy_backend=Backends.MYSQL)
+    #    run_crud_verify(vrfy_backend=Backends.SHELVES)
+    #    run_crud_verify(vrfy_backend=Backends.SQLLIGHT)
+    #    run_crud_verify(vrfy_backend=Backends.TEXTFILE)
 
     # =================================================
     """
