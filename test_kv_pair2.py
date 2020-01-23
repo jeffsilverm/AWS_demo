@@ -66,35 +66,35 @@ def test_duplicate_keys(select_backend):
 def test_create_and_recover_key(select_backend, key, value):
     # Step into create ======================== step into create
     select_backend.create(key, value)
-    returned_value = select_backend.be_dbms.read(key)
+    returned_value = select_backend.read(key)
     assert (value == returned_value), \
         f"value {value} was not returned.  {returned_value} was, instead"
 
 
-def test_read_non_existent_keys(be_dbms) -> None:
+def test_read_non_existent_keys(select_backend) -> None:
     # This should throw an exception
     key = random_string(23)
 
     # I don't know what exception will be thrown
     with pytest.raises(expected_exception=Exception) as excinfo:
-        be_dbms.read(key=key)
+        select_backend.read(key=key)
     print(
         "Attempting to find a record by a key which does not exist " + str(
             excinfo), file=sys.stderr)
     return None
 
 @pytest.mark.dependency(depends=['select_backend', 'test_create_and_recover_key'])
-def test_update(be_dbms):
+def test_update(select_backend):
     key = random_string(6)
     original_value = random_string(11)
-    be_dbms.create(key=key, value=original_value)
+    select_backend.create(key=key, value=original_value)
     print("In test_kvpair2.TestMyKvPair.test_update.\n"
           f"Just created a document with key {key} "
           f"and value {original_value}.", file=sys.stderr)
     new_value = random_string(11)
-    be_dbms.update(key=key, value=new_value)
+    select_backend.update(key=key, value=new_value)
     print(f"Just updated {key} with {new_value}.", file=sys.stderr)
-    answer = be_dbms.read(key=key)
+    answer = select_backend.read(key=key)
     if answer == new_value:
         print("Updated successfully", file=sys.stderr)
     elif answer == original_value:
@@ -108,7 +108,7 @@ def test_update(be_dbms):
     return
 
 
-def test_delete(be_dbms):
+def test_delete(select_backend):
     """
     Verify that I can delete a record.
     Create a record with a known key.
@@ -118,41 +118,41 @@ def test_delete(be_dbms):
     """
     key = random_string(6)
     original_value = random_string(11)
-    be_dbms.create(key=key, value=original_value)
-    answer = be_dbms.read(key=key)
+    select_backend.create(key=key, value=original_value)
+    answer = select_backend.read(key=key)
     assert answer == original_value, \
         "Tried to create a record, the value was wrong on readback" \
         f"Key is {key}, original value was {original_value}, " \
         f"readback value is {answer}"
-    be_dbms.delete(key=key)
+    select_backend.delete(key=key)
     with pytest.raises(expected_exception=Exception) as e:
-        be_dbms.read(key=key)
+        select_backend.read(key=key)
     print(f"read raised the {str(e)} exception as expected",
           file=sys.stderr)
 
 
-def test_update_non_existent_keys(be_dbms) -> None:
+def test_update_non_existent_keys(select_backend) -> None:
     key = random_string(6)
     value = random_string(11)
     with pytest.raises(expected_exception=Exception) as e:
-        be_dbms.update(key=key, value=value)
+        select_backend.update(key=key, value=value)
     print("After trying to update a non-existance key, update raised a "
           f"a {str(e)} exception, as expected", file=sys.stderr)
     return
 
 
-def test_get_key_list(be_dbms):
-    assert hasattr(be_dbms, 'get_key_list')
+def test_get_key_list(select_backend):
+    assert hasattr(select_backend, 'get_key_list')
     pass
 
 
-def test_read_after_disconnect(be_dbms) -> None:
-    assert not be_dbms.connected, "be_dbms.connected is True at " \
+def test_read_after_disconnect(select_backend) -> None:
+    assert not select_backend.connected, "select_backend.connected is True at " \
                                   "test_read_after_disconnect.  The DBMS " \
                                   "should have been disconnected already "
     key = random_string(4)
     with pytest.raises(Exception) as e:
-        be_dbms.read(key)
+        select_backend.read(key)
         print(str(e))
 
 
