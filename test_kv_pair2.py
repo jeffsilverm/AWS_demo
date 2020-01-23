@@ -18,15 +18,6 @@ def select_backend(request: kv_pair2.Backends):
     :param  request kv_pair2.Backends    the backend to test
     """
 
-    # Define a finalizer and let pytest know that it is a finalizer
-    def fin():
-        print("Calling backend_obj.disconnect")
-        backend_obj.disconnect()
-        assert not backend_obj.connected, "backend_obj is True after " \
-                                          "disconnect "
-
-    request.addfinalizer(fin)
-
     assert isinstance(request.param, kv_pair2.Backends), \
         f"request.param is type {type(request.param)}, " \
         f"but should really be an instance of kv_pair2.Backends"
@@ -41,10 +32,19 @@ def select_backend(request: kv_pair2.Backends):
         raise NotImplementedError(str(request.parm))
     # These asserts are here because I don't trust my knowledge of pytest
     assert callable(backend_obj.connect), \
-        "backend_obj.connect is not callable and should be. "\
-        f"request.parm is {str(request.parm)} and "\
+        "backend_obj.connect is not callable and should be. " \
+        f"request.parm is {str(request.parm)} and " \
         f"the attributes of backend_obj are {dir(backend_obj)}."
     assert backend_obj.connected, "backend_obj.connected is False"
+
+    # Define a finalizer and let pytest know that it is a finalizer
+    def fin():
+        print("Calling backend_obj.disconnect")
+        backend_obj.disconnect()
+        assert not backend_obj.connected, "backend_obj is True after " \
+                                          "disconnect "
+
+    request.addfinalizer(fin)
     return backend_obj
 
 
