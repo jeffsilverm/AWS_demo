@@ -26,6 +26,7 @@ import sys
 import uuid
 from enum import Enum, unique, auto
 from string import ascii_letters
+from traceback import print_stack
 
 import pymongo
 from pymongo import errors
@@ -115,7 +116,7 @@ class BackendsAbstract(object):
         #
         # This is here to stop variable unused errors in pycharm
         print(db_server, db_port, db_name, table_name, file=sys.stderr)
-        print(f"The type of self is {type(self)}")
+        print(f"The type of self is {type(self)}", file=sys.stderr)
         # Actually, now that I have the following statement, I can get rid of
         # those upper 2 statements, but I am leaving them in for now.
         self.connected = True
@@ -188,7 +189,7 @@ class BackendDict(BackendsAbstract):
     def create(self, key, value) -> None:  # class BackendDict
         """Create a record or a document"""
         if key in self.dict:
-            raise ValueError(f"key {key} is already in dictionary.  " 
+            raise ValueError(f"key {key} is already in dictionary.  "
                              f"Value is {self.dict[key]}.")
 
     def read(self, key) -> None:  # class BackendDict
@@ -236,11 +237,11 @@ class BackendMongo(BackendsAbstract):
 
         # Creating a BackendMongo object is *not* generic.  However, the
         # nature of the object is hidden inside the BackendMongo class
-        self.__init__(db_server=db_server, db_port=db_port,
-                      db_name=db_name,
-                      table_name=table_name)
+        connection = self.__init__(db_server=db_server, db_port=db_port,
+                                   db_name=db_name,
+                                   table_name=table_name)
 
-        pass
+        return connection
 
     def __init__(self, db_server, db_port, db_name, table_name) -> None:
         """
@@ -256,6 +257,10 @@ class BackendMongo(BackendsAbstract):
         # This call is a bit future proofing
         BackendsAbstract.__init__(self, db_server=db_server, db_port=db_port,
                                   db_name=db_name, table_name=table_name)
+        # Method BackendMongo.__init__ is called twice, should only be called
+        # once (I think).  Where is it getting called from?
+        print_stack()
+
         # I ran into this problem, db_port was a string, raised a _topography
         # problem.
         assert isinstance(db_port, int), "db_port has to be an int"
@@ -284,7 +289,9 @@ class BackendMongo(BackendsAbstract):
                   str(c), file=sys.stderr)
             raise
         else:
-            print("Have a good connection to the database", file=sys.stderr)
+            print(f"Have a good connection to the database server ",
+                  f"{self.client.address} port {self.client.PORT}", \
+                  file=sys.stderr)
         # db = conn.database
         # This was suggested by
         # https://stackoverflow.com/questions/18371351/python-pymongo-insert
@@ -298,6 +305,7 @@ class BackendMongo(BackendsAbstract):
         # noinspection PyUnresolvedReferences
         assert isinstance(self.db_obj, pymongo.database.Database), \
             f"db_obj is type {type(self.db_obj)} not pymongo.database.Database"
+        print(f"Have database {self.db_obj.name}", file=sys.stderr)
         try:
             collection_list = self.db_obj.list_collection_names()
             if table_name in collection_list:
@@ -307,7 +315,9 @@ class BackendMongo(BackendsAbstract):
                 self.coll = self.db_obj.create_collection(name=table_name)
         except pymongo.errors.CollectionInvalid as c:
             print(f"db_obj.create_collection({db_name} raised an"
-                  f"{str(c)} exception", file=sys.stderr)
+                  f"{str(c)} exception",
+                  f"The collection_list is {collection_list}",
+                  file=sys.stderr)
             raise
             # These asserts are here to test my understanding
         assert self.db_obj.name == db_name, \
@@ -316,6 +326,7 @@ class BackendMongo(BackendsAbstract):
             f"self.coll.name is {self.coll.name} and table_name is {table_name}"
         assert hasattr(self.coll, 'insert_one'), \
             f"self.coll should have an insert_one attribute and doesn't"
+        print(f"Using collection {self.coll.name}", file=sys.stderr)
         return
 
     def create(self, key, value) -> None:
@@ -644,7 +655,8 @@ if "__main__" == __name__:
         return ''.join(random.choice(ascii_letters)
                        for _ in range(length))  # _ is a variable is not used
 
-    def verify_crud( db ):
+
+    def verify_crud(db):
 
         kv_pairs = {}
         for m in range(4):
@@ -655,18 +667,19 @@ if "__main__" == __name__:
         for k in kv_pairs.keys():
             value = db.read(key=k)
             assert value == kv_pairs[k], \
-                           f"db.read should have returned {kv_pairs[k]}, "\
-                            f"but actually returned {value}"
+                f"db.read should have returned {kv_pairs[k]}, " \
+                f"but actually returned {value}"
         # Keep going, we're not done yet with verify_crud
+
 
     db_mongo = BackendMongo(db_server="localhost", db_port=27017,
                             db_name="Eric", table_name="tab34")
-    verify_crud( db_mongo )
+    verify_crud(db_mongo)
     db_mongo.disconnect()
     del db_mongo
 
     db_dict = BackendDict()
-    verify_crud( db_dict )
+    verify_crud(db_dict)
     db_dict.disconnect()
 
     sys.exit(0)
